@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>AN/AAQ-37 DAS 統合モニター</title>
+    <style>
+        body {
+            background-color: #0b110e;
+            color: #00ff66;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 20px;
+        }
+        h1, h2 {
+            border-bottom: 1px solid #00ff66;
+            padding-bottom: 5px;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .sensor-card {
+            border: 1px solid #00ff66;
+            background-color: #121e16;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .sensor-title {
+            font-weight: bold;
+            color: #33ff99;
+            border-bottom: 1px dashed #00ff66;
+            margin-bottom: 8px;
+        }
+        .threat-alert {
+            color: #ff3333;
+            font-weight: bold;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+        .system-info {
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>AN/AAQ-37 DAS (Distributed Aperture System) Simulator</h1>
+    <div class="system-info">
+        ステータス: <span id="sys-status">CONNECTING...</span> | 
+        時刻: <span id="sys-time">-</span>
+    </div>
+
+    <h2>360° Spherical Sensor Matrix (6 IR Apertures)</h2>
+    <div class="grid-container" id="sensor-matrix">
+        </div>
+
+    <script>
+        const ws = new WebSocket(`ws://${window.location.host}`);
+        const matrixContainer = document.getElementById('sensor-matrix');
+        const sysStatus = document.getElementById('sys-status');
+        const sysTime = document.getElementById('sys-time');
+
+        ws.onopen = () => {
+            sysStatus.textContent = "ONLINE (DAS FUNCTIONAL)";
+            sysStatus.style.color = "#00ff66";
+        };
+
+        ws.onclose = () => {
+            sysStatus.textContent = "OFFLINE";
+            sysStatus.style.color = "#ff3333";
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            sysTime.textContent = data.timestamp;
+
+            // マトリックス表示の更新
+            matrixContainer.innerHTML = '';
+            
+            data.sensors.forEach(sensor => {
+                const card = document.createElement('div');
+                card.className = 'sensor-card';
+                
+                let targetsHtml = '<p style="color: #888;">目標未検知 (CLEAN)</p>';
+                if (sensor.targets.length > 0) {
+                    targetsHtml = sensor.targets.map(t => `
+                        <div class="threat-alert">
+                            ⚠️ TRACKING: ${t.type} [${t.targetId}]<br>
+                            └ 方位: ${t.azimuth}° | 仰角: ${t.elevation}°<br>
+                            └ 距離: ${t.rangeKm} km | IR強度: ${t.signalStrength}%
+                        </div>
+                    `).join('<hr style="border-color:#336644;">');
+                }
+
+                card.innerHTML = `
+                    <div class="sensor-title">${sensor.sensorId} - ${sensor.location}</div>
+                    <p style="margin:5px 0; font-size:0.8em; color:#888;">FOV: ${sensor.fov}</p>
+                    <div>${targetsHtml}</div>
+                `;
+                matrixContainer.appendChild(card);
+            });
+        };
+    </script>
+</body>
+</html>
